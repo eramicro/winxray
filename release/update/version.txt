@@ -1,8 +1,8 @@
 {
-    "description":"更新默认Xray 核心到V1.45版本！",
+    "description":"V4.4 修复托盘右键扫一扫导入节点报错！",
     "format":".lzma",
     "main":"\\WinXray.exe",
     "updater":"\\WinXray.exe",
     "url":"https://raw.githubusercontent.com/TheMRLL/winxray/main/release/update/",
-    "version":"3.7"
+    "version":"4.4"
 }

@@ -22,7 +22,7 @@ frmXray.listview.insertColumn("加密",90)
 frmXray.listview.insertColumn("协议",50) 
 frmXray.listview.insertColumn("备注",190) 
 frmXray.listview.insertColumn("响应速度",95) 
-frmXray.listview.insertColumn("状态",-1) 
+frmXray.listview.insertColumn("状态",-1);
 frmXray.listview.setExtended(0x10000/*_LVS_EX_DOUBLEBUFFER*/);
 
 frmXray.show();
@@ -52,7 +52,7 @@ var activeOutbound = function(outboundIndex,outboundAddress,enableRetry,timerTes
 		var started,err = xray.core.restart(frmXray.edit,outbound);
 		startTesting = started;
 		if(!started){
-			frmXray.edit.print("启动 xray 错误",err:""); 
+			frmXray.edit.print("启动 Xray 错误",err:""); 
 			frmXray.btnTcping.disabledText = null;
 			return false;
 		}
@@ -501,7 +501,7 @@ frmXray.listview.onnotify = function(id,code,ptr){
 				return 0/*_CDRF_DODEFAULT*/
 			}
 		}
-		case  0xFFFFFFFD/*_NM_DBLCLK*/ {
+		case 0xFFFFFFFD/*_NM_DBLCLK*/ {
 			var nm = frmXray.listview.getNotifyMessage(code,ptr);
 			if( nm ){
 				xray.core.lastDownloadingCoreFailed = false;
@@ -552,9 +552,16 @@ frmXray.listview.onnotify = function(id,code,ptr){
 					publish("outbounds.updateConfigJson");
 				});
 				
-				popmenu.add('清除「不可用」服务器',function(id){
+				popmenu.add('清除「不可用」节点',function(id){
 					removeOutbounds();
 				});	
+				
+				popmenu.add('清除「重复」节点',function(id){
+					var removecount = frmXray.removeRepeat();
+					if(removecount){
+						frmXray.edit.print("删除了"+removecount+"个节点")
+						}
+				});
 				
 				popmenu.add("重置为默认服务器列表",
 					function(id){
@@ -674,10 +681,17 @@ frmXray.listview.onnotify = function(id,code,ptr){
 				}
 			});
 			
-			popmenu.add('清除「不可用」服务器',function(id){
+			popmenu.add('清除「不可用」节点',function(id){
 				removeOutbounds();
 			});	
 			
+			popmenu.add('清除「重复」节点',function(id){
+				var removecount = frmXray.removeRepeat();
+				if(removecount){
+					frmXray.edit.print("删除了"+removecount+"个节点")
+					}
+				});
+				
 			popmenu.add("重置为默认服务器列表",
 				function(id){
 					..config.__loadDefaultOutbounds();
@@ -773,6 +787,43 @@ frmXray.listview.onnotify = function(id,code,ptr){
 					}
 				});  
 			}
+			if(#selectedItems>1){
+				popmenu.add();
+				popmenu.add('批量生成二维码',function(id){
+					if(currentIdx){
+						var outbounds = ..table.array();
+						for(i=1;#selectedItems;1){
+							..table.push(outbounds,config.proxy.outbounds[selectedItems[i]]);
+						}
+						
+						var str = xray.outbounds.exportSharedLinks(outbounds);
+						if(str){
+							var frmChild = frmXray.loadForm("\forms\main\tools\qr.aardio");
+							frmChild.createQrCode(str);
+							frmChild.show();
+						}  
+					}
+				});
+				
+				popmenu.add('批量复制服务器分享链接',function(id){
+					if(currentIdx){
+						var outbounds = ..table.array();
+						for(i=1;#selectedItems;1){
+							..table.push(outbounds,config.proxy.outbounds[selectedItems[i]]);
+						}
+						
+						var str = xray.outbounds.exportSharedLinks(outbounds);
+						if(str){
+							import win.clip;
+							win.clip.write(str);
+							frmXray.msgOk("已将选中链接的分享链接写入剪贴板",1200);
+						}	
+					}
+				});
+
+				popmenu.add();
+			}
+			
 			popmenu.popup(x,y,true);
 		}
 		case 0xFFFFFF94/*_LVN_COLUMNCLICK*/{
@@ -875,6 +926,151 @@ frmXray.listview.sortBySpeed = function () {
 		frmXray.listview.setItemText("活动服务器：正常",frmXray.listview.activeOutboundIndex,8)
 	} 
 	frmXray.listview.setColumnImage(7, desc ? 1 : 0);
+}
+//移除重复节点(保留序号在前的)
+frmXray.removeRepeat=function(){
+	//跳过检测异常
+	frmXray.listChanging = true;
+	//避免后台线程改变activeIndex
+	frmXray.onTcpingReturn = function(outboundIndex,address,succeeded,speedText){}; 
+	frmXray.btnTcping.disabledText = null;
+	frmXray.autoTesting = false;
+	//标记活动节点
+	var activeIndex,activeText = frmXray.listview.activeOutboundIndex;  
+	var outbounds = ..table.clone(config.proxy.outbounds);
+	if( activeIndex ){
+		outbounds[activeIndex].active = true;
+		activeText = frmXray.listview.getItemText(activeIndex);
+	}
+	//标记重复节点
+	for(i=1;#outbounds;1){
+		for(j=1;#outbounds;1){
+			if( j<=i ){ continue }
+			if( outbounds[j].address==outbounds[i].address 
+				&& outbounds[j].port==outbounds[i].port ){
+				outbounds[j].repeat=true;
+			}
+		}
+	}
+	//删除重复节点
+	var removecount=0;
+	for(i=#outbounds;1;-1){
+		if(outbounds[i].repeat){
+			table.remove(outbounds,i);
+			removecount++;
+		}
+	}
+	//重设活动节点序号
+	frmXray.listview.activeOutboundIndex = null;
+	for(i=1;#outbounds;1){
+		var ob = outbounds[i];
+		if(ob.active){
+			frmXray.listview.activeOutboundIndex = i;
+			activeIndex = i;
+		}
+		ob.repeat = null;
+		ob.active = null;
+	}
+	//保存配置文件
+	config.proxy.outbounds = outbounds;
+	config.proxy.save();
+	frmXray.listview.setTable(outbounds);
+	//重新测速
+	frmXray.btnTcping.oncommand();
+	//继续检测异常
+	frmXray.listChanging = false;
+	
+	return removecount; 
+}
+//按键
+import win.ui.accelerator;
+var accelerator = win.ui.accelerator({
+	{//按下Enter键
+		vkey = '13';
+		oncommand=function(){
+			frmXray.btnTcping.oncommand();			
+		}	   
+	};
+	{ //按下DELETE键
+		vkey = '46'; 
+		oncommand = function(){
+			var selectedItems = frmXray.listview.selected;
+			removeOutbounds(selectedItems);
+		}
+	};
+	{ //按下ctrl+C
+		ctrl = true; vkey = 'C'#; 
+		oncommand = function(){
+			var selectedItems = frmXray.listview.selected;
+			if( !#selectedItems ){
+				frmXray.msgFrown("没有选中节点！");
+				return ; 
+			}
+			
+			var outbounds = ..table.array();
+			for(i=1;#selectedItems;1){..table.push(outbounds,config.proxy.outbounds[selectedItems[i]])}
+			var str = xray.outbounds.exportSharedLinks(outbounds);
+			if(str){
+				import win.clip;
+				win.clip.write(str);
+				frmXray.msgOk("已将选中节点的分享链接写入剪贴板",1200);
+			}
+		}
+	};
+	{//ctrl+V
+		ctrl = true; vkey = 'V'#;
+		oncommand=function(){
+			frmXray.btnImportServerFromClipBd.oncommand();
+		}
+	};
+	{//ctrl+A
+		ctrl = true; vkey = 'A'#;
+		oncommand=function(){
+			var outbounds=config.proxy.outbounds;
+			for(i=#outbounds;1;-1){
+				frmXray.listview.setSelected(i);
+			}
+		}
+	};
+},frmXray);
+//文件拖放
+frmXray.onDropFiles = function(files){
+	for(i=1;#files;1){
+		var bmp = gdip.bitmap(files[i]);
+		if(bmp){
+			import zbar;
+			var scanner = zbar.scanner();
+			scanner.config('qrcode.enable');
+			scanner.scanBitmap(bmp,function(typeName,data){  
+		    	import win.clip;
+				win.clip.write(data);
+				
+				var outbounds = xray.outbounds.importFromString(data);
+					if(#outbounds){
+						..table.append(config.proxy.outbounds,outbounds); 
+						publish("uiCommand.restartxrayCore");
+						publish("outbounds.updateConfigJson");
+						frmXray.msgOk("已成功导入" + #outbounds + "个服务器",1200); 
+						return; 
+			           }
+			    })					
+	 } 
+	 
+		var str=string.load(files[i]);
+		if(str){
+			str = ..string.trim(str,'"\'\t\r\n '); 
+	
+			var outbounds = xray.outbounds.importFromString(str);
+					if(#outbounds){
+						..table.append(config.proxy.outbounds,outbounds); 
+						publish("uiCommand.restartxrayCore");
+						publish("outbounds.updateConfigJson");
+						frmXray.msgOk("已成功导入" + #outbounds + "个服务器",1200); 
+						return; 
+					}
+		}
+	}
+	//frmXray.msgFrown('未能在文件中导入节点!');
 }
 
 import win.imageList;

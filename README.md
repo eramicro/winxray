@@ -1,10 +1,10 @@
 ﻿
-      WinXray V3.7 更新默认Xray 核心到V1.45版本！
+      WinXray V4.4 修复托盘右键扫一扫导入节点报错！
       
 
 导语：
      请用官网地址下载：https://www.winxray.com
-     winxray存在之本就是：安全，隐私，极速！
+     推荐全协议机场[速蛙云VPN](https://ads.iuvpn.com)
      
 ![xray](./screenshots/Xray.png)
 
